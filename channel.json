@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "repository": "lutiy-dev/OVizLAB-Skills",
+  "sequence": 1,
+  "source_commit": "debd8455a9d0293a00ea8fe7a812fa29d1073512",
+  "archive_url": "https://github.com/lutiy-dev/OVizLAB-Skills/releases/download/v1.0.0/ovizlab-agent-installer.zip",
+  "archive_sha256": "a43abd61dfa151b7ab139841f2f90f53fd208b50dd618b12da0b2cf99f68ba22"
+}
