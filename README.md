@@ -14,7 +14,7 @@ Public distribution of verified Agent Skills for OpenAI Codex, Claude Code and A
 ## Installation and updates
 Use a **verified GitHub Release** `ovizlab-agent-installer.zip`. Check its independent expected SHA-256 and `bundle.json.source_commit` before running any scripts. First preview via `install.py --agent codex`; install only with scoped approval and `--apply`. Preserve the receipt for rollback. A file being installed does not prove Codex loaded its Skill; verify discovery in a fresh agent session.
 
-**Release status:** PUBLIC SOURCE AVAILABLE once these files are published; a downloadable release and `channel.json` remain **NOT PUBLISHED** until the official ZIP Release asset is uploaded and independently checked. Do not enable background updates before `channel.json` and the asset are accessible without authorization.
+**Release status: v1.0.0 PUBLISHED / VERIFIED.** [Download the official ZIP](https://github.com/lutiy-dev/OVizLAB-Skills/releases/download/v1.0.0/ovizlab-agent-installer.zip) · [Release details](https://github.com/lutiy-dev/OVizLAB-Skills/releases/tag/v1.0.0) · [Update channel](channel.json). SHA-256: `a43abd61dfa151b7ab139841f2f90f53fd208b50dd618b12da0b2cf99f68ba22`. Current channel sequence: `1`; pinned source commit: `debd8455a9d0293a00ea8fe7a812fa29d1073512`. GitHub Actions validated exact downloaded ZIP bytes before publishing the channel (run `45959493185`).
 
 The optional updater must be explicitly enrolled on each machine. It does not silently replace local customizations, automatically enroll new Skills, or modify Codex settings. Review [background update security limitations](docs/OVIZLAB_BACKGROUND_UPDATES.md), including the absence of an independent publisher signature in LAB.
 
