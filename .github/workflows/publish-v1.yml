@@ -1,0 +1,119 @@
+name: OVizLAB v1.0.0 — verified first release
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/publish-v1.yml"
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: ovizlab-initial-release-v1
+  cancel-in-progress: false
+jobs:
+  publish-v1:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - name: Fetch public distribution
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Prepare Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check repository identity and baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "lutiy-dev/OVizLAB-Skills"
+          test "$GITHUB_REF" = "refs/heads/main"
+          test ! -f channel.json
+          python -m py_compile tools/build_release_v1.py agent_installer.py auto_update.py
+          test -f release-v1.lock.json
+          test -f LICENSE
+          test -f NOTICE
+      - name: Build and verify pinned offline archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/build_release_v1.py . dist/ovizlab-agent-installer.zip | tee dist-report.txt
+          python - <<'PY'
+          import hashlib, json, pathlib, tempfile, zipfile
+          from agent_installer import load_bundle, prepare_plan
+          archive = pathlib.Path("dist/ovizlab-agent-installer.zip")
+          with tempfile.TemporaryDirectory() as work:
+              dest = pathlib.Path(work)/"package"
+              dest.mkdir()
+              with zipfile.ZipFile(archive) as z:
+                  assert all(not x.filename.startswith("/") and ".." not in x.filename.split("/") for x in z.infolist())
+                  z.extractall(dest)
+              data, _ = load_bundle(dest)
+              assert len(data["skills"]) == 28
+              home = pathlib.Path(work)/"home"
+              home.mkdir()
+              info, files, plan = prepare_plan(dest, ["codex"], "user", home=home)
+              assert len(plan) == 28 and all(x["action"] == "INSTALL" for x in plan)
+          candidate = json.loads(pathlib.Path("dist/channel-v1.candidate.json").read_text())
+          assert candidate["archive_sha256"] == hashlib.sha256(archive.read_bytes()).hexdigest()
+          assert candidate["source_commit"] == "debd8455a9d0293a00ea8fe7a812fa29d1073512"
+          print("PACKAGE_VALIDATED: 28 Skills / 48 files; dry-run PASS; no installation")
+          PY
+      - name: Upload review artifact (private to workflow access)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ovizlab-v1-verified-release-candidate
+          path: |
+            dist/ovizlab-agent-installer.zip
+            dist/channel-v1.candidate.json
+            dist-report.txt
+          if-no-files-found: error
+      - name: Publish exactly one GitHub Release v1.0.0
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view v1.0.0 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "RELEASE_EXISTS: STOP, never replace official asset."
+            exit 1
+          fi
+          gh release create v1.0.0 dist/ovizlab-agent-installer.zip \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "OVizLAB Skills v1.0.0" \
+            --notes "Public distribution of 28 validated OVizLAB Skills. Pinned private source commit: debd8455a9d0293a00ea8fe7a812fa29d1073512. Installer dry-run, backup/rollback and optional guarded background updater. No automatic enrollment; LAB updater requires independent security and Windows field testing."
+      - name: Verify unauthenticated public ZIP bytes before channel
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="https://github.com/lutiy-dev/OVizLAB-Skills/releases/download/v1.0.0/ovizlab-agent-installer.zip"
+          curl --retry 8 --retry-delay 4 --retry-all-errors --fail --location --silent --show-error \
+            --max-time 120 --output dist/public-downloaded.zip "$url"
+          python - <<'PY'
+          import hashlib, json, pathlib, zipfile
+          original = pathlib.Path("dist/ovizlab-agent-installer.zip").read_bytes()
+          public = pathlib.Path("dist/public-downloaded.zip").read_bytes()
+          expected = json.loads(pathlib.Path("dist/channel-v1.candidate.json").read_text())["archive_sha256"]
+          if original != public or hashlib.sha256(public).hexdigest() != expected:
+              raise SystemExit("PUBLIC_ZIP_MISMATCH: channel publication BLOCKED")
+          with zipfile.ZipFile(pathlib.Path("dist/public-downloaded.zip")) as z:
+              if z.testzip() is not None:
+                  raise SystemExit("PUBLIC_ZIP_CRC_FAILURE")
+          print("PUBLIC_ZIP_PASS: unauthenticated artifact matches verified bytes")
+          PY
+      - name: Publish channel.json after verified public release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh api "repos/$GITHUB_REPOSITORY/contents/channel.json" >/dev/null 2>&1; then
+            echo "CHANNEL_EXISTS: STOP, never overwrite v1 channel."
+            exit 1
+          fi
+          encoded="$(base64 -w 0 dist/channel-v1.candidate.json)"
+          gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/channel.json" \
+            -f message="release(v1): activate pinned public channel after verified ZIP" \
+            -f content="$encoded" -f branch=main >/dev/null
+          echo "CHANNEL_PUBLISHED: v1.0.0; verify read-back independently."
